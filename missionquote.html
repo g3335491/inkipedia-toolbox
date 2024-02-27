@@ -52,8 +52,12 @@ function msg_fmt_mediawiki(/** @type {string} */ msg, /** @type {string} */ lang
     // Pause
     msg = msg.replace(/\[group=0001 type=0000 params=[0-9a-f]{2} 00 00 00\]/g, "");
 
+    // Remove consecutive color tags
+    msg = msg.replace(/\[color=[0-9a-f]{4}\](\s*)(\[color=[0-9a-f]{4}\])/g, "$1$2");
+    // Remove repeated orange color tag
+    msg = msg.replace(/(\[color=0004\][^\[\]]*)\[color=0004\]/g, "$1");
     // Orange color
-    msg = msg.replace(/\[color=0004\](.+?)( ?)\[color=ffff\]/g, "{{Color|$1|DarkOrange}}$2");
+    msg = msg.replace(/\[color=0004\]([\s\S]+?)( ?)\[color=ffff\]/g, "{{Color|$1|DarkOrange}}$2");
 
     // Icons
     msg = msg.replace(/\[group=0003 type=([0-9a-f]{4}) params=((?:[0-9a-f]{2} ){7}[0-9a-f]{2})\]/g, (match, p_type, p_params) => {
@@ -96,7 +100,9 @@ function msg_fmt_mediawiki(/** @type {string} */ msg, /** @type {string} */ lang
         throw `unprocessed tag in:\n${JSON.stringify(msg)}`;
     }
 
-    msg = msg.replaceAll("\n", "<br>")
+    // line breaks
+    msg = msg.replaceAll("\n", "<br>");
+
     if (lang === "CNzh") {
         msg = msg.replaceAll("“", "&ldquo;");
         msg = msg.replaceAll("”", "&rdquo;");
