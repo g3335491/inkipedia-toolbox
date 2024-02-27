@@ -53,7 +53,7 @@ function msg_fmt_mediawiki(/** @type {string} */ msg, /** @type {string} */ lang
     msg = msg.replace(/\[group=0001 type=0000 params=[0-9a-f]{2} 00 00 00\]/g, "");
 
     // Orange color
-    msg = msg.replace(/\[color=0004\](.+)\[color=ffff\]/g, "{{Color|$1|DarkOrange}}");
+    msg = msg.replace(/\[color=0004\](.+?)( ?)\[color=ffff\]/g, "{{Color|$1|DarkOrange}}$2");
 
     // Icons
     msg = msg.replace(/\[group=0003 type=([0-9a-f]{4}) params=((?:[0-9a-f]{2} ){7}[0-9a-f]{2})\]/g, (match, p_type, p_params) => {
