@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>MissionQuote - Inkipedia Toolbox</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+div.form {
+    display: grid;
+    grid-template-columns: min-content auto;
+}
+div.form>label {
+    padding: 4px;
+}
+</style>
+</head>
+<body>
+
+<div class="form">
+<label for="character">Character</label>
+<select id="character">
+    <optgroup label="Side Order">
+        <option value="SO|Pearl Drone">Pearl Drone</option>
+        <option value="SO|Acht">Acht</option>
+        <option value="SO|Marina">Marina</option>
+    </optgroup>
+</select>
+<label for="in">Input<br><a href="javascript:paste()">(paste)</a></label>
+<textarea id="in" style="width: 100%; height: 200px;" spellcheck="false"></textarea>
+<label for="out">Output<br><a href="javascript:copy()">(copy)</a></label>
+<textarea id="out" style="width: 100%; height: 200px;" readonly></textarea>
+</div>
+
+<script>
+'use strict';
+
+/**
+ * @returns {string[]}
+ */
+function split_dialogue(/** @type {string} */ msg) {
+    return msg.split("[page break]");
+}
+
+/**
+ * @returns {string}
+ */
+function msg_fmt_mediawiki(/** @type {string} */ msg, /** @type {string} */ lang = "USen") {
+    // Pause
+    msg = msg.replace(/\[group=0001 type=0000 params=[0-9a-f]{2} 00 00 00\]/g, "");
+
+    // Orange color
+    msg = msg.replace(/\[color=0004\](.+)\[color=ffff\]/g, "{{Color|$1|DarkOrange}}");
+
+    // Icons
+    msg = msg.replace(/\[group=0003 type=([0-9a-f]{4}) params=((?:[0-9a-f]{2} ){7}[0-9a-f]{2})\]/g, (match, p_type, p_params) => {
+        // The icon type mapping can be found in `CommonMsg/PictFontRef`
+        const icons = {
+            "0037": "{{Icon|SO|color chip general}}",
+            "0038": "{{Icon|SO|palette}}",
+            "0039": "{{Icon|SO|Zone}}",
+            "003a": "{{Icon|SO|Turbine tower}}",
+            "003b": "{{Icon|SO|Infinity ball}}",
+            "003c": "{{Icon|SO|Panicking Alla Mambo}}",
+            "003d": "{{Icon|SO|portal}}",
+            "003e": "{{Icon|SO|Key}}",
+            "003f": "{{Icon|SO|Membux}}",
+            "0040": "{{Icon|SO|Prlz}}",
+            "0041": "{{Icon|SO|armor}}",
+            "0042": "{{Icon|SO|ink bottle}}",
+            "0043": "{{Icon|SO|disc piece}}",
+            "0044": "{{Icon|SO|drone battery}}",
+            "0045": "{{Icon|SO|Lucky Bomb}}",
+            "0046": "{{Button|A|Switch}}",
+            "0047": "{{Button|B|Switch}}",
+            "0048": "{{Button|X|Switch}}",
+            "0049": "{{Button|Y|Switch}}",
+            "004a": "{{Button|Plus|Switch}}",
+            "004b": "{{Button|Left Stick|Switch}}",
+            "004c": "{{Button|Right Stick|Switch}}",
+            "004e": "{{Button|R|Switch}}",
+            "004f": "{{Button|ZL|Switch}}",
+            "0050": "{{Button|ZR|Switch}}",
+            "0052": "{{Button|Minus|Switch}}",
+        };
+        if (p_type in icons) {
+            return icons[p_type];
+        }
+        throw `unhandled icon ${p_type} in:\n${JSON.stringify(msg)}`;
+    });
+
+    if (msg.indexOf("[") >= 0) {
+        throw `unprocessed tag in:\n${JSON.stringify(msg)}`;
+    }
+
+    msg = msg.replaceAll("\n", "<br>")
+    if (lang === "CNzh") {
+        msg = msg.replaceAll("“", "&ldquo;");
+        msg = msg.replaceAll("”", "&rdquo;");
+    }
+
+    return msg;
+}
+
+/** @type {HTMLTextAreaElement} */
+const inbox = document.getElementById("in");
+/** @type {HTMLTextAreaElement} */
+const outbox = document.getElementById("out");
+/** @type {HTMLSelectElement} */
+const charabox = document.getElementById("character");
+
+function update() {
+    let str = "";
+    try {
+        str = JSON.parse(inbox.value);
+    } catch (ex) {
+        outbox.value = "(not valid JSON string)";
+        return;
+    }
+    if (typeof str !== "string") {
+        outbox.value = "(not valid JSON string)";
+        return;
+    }
+    try {
+        outbox.value = "";
+        for (let box of split_dialogue(str)) {
+            outbox.value += `{{MissionQuote|${charabox.value}|${msg_fmt_mediawiki(box)}}}\n`;
+        } 
+    } catch (ex) {
+        outbox.value += "\nERROR:\n" + ex;
+    }
+}
+
+inbox.addEventListener("change", event => {
+    update();
+});
+
+inbox.addEventListener("input", event => {
+    update();
+});
+
+charabox.addEventListener("change", event => {
+    update();
+});
+
+update();
+
+async function paste() {
+    let value = await navigator.clipboard.readText();
+    inbox.select();
+    document.execCommand("insertText", false, value);
+    inbox.select();
+}
+
+async function copy() {
+    await navigator.clipboard.writeText(outbox.value);
+    outbox.select();
+}
+
+</script>
+</body>
+</html>
