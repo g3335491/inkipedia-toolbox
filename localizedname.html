@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Localized name - Inkipedia Toolbox</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+div.form {
+    display: grid;
+    grid-template-columns: max-content auto;
+}
+div.form>* {
+    margin: 2px;
+    padding: 2px 4px;
+}
+</style>
+</head>
+<body>
+
+<div class="form">
+<label for="colour">Colour</label>
+<select id="colour">
+    <option value="Splatoon 3">Splatoon 3</option>
+    <option value="Side Order">Side Order</option>
+    <option value="Salmon Run">Salmon Run</option>
+    <option value="Generic">Generic</option>
+    <option disabled></option>
+    <option value="Splatoon">Splatoon</option>
+    <option value="Splatoon 2">Splatoon 2</option>
+    <option value="Octo Expansion">Octo Expansion</option>
+</select>
+<label style="grid-column: 2;"><input type="checkbox" id="engAsTitle"> Use English name as title</label>
+<label for="path">Key path</label>
+<input type="text" id="path">
+<label for="file" style="grid-row: span 2;">Language<br>files</label>
+<input type="file" id="file" multiple>
+<button type="button" id="btnReset" style="width: 200px; grid-column: 2;">Clear language files</button>
+<label for="out">Output<br><a href="javascript:copy()">(copy)</a></label>
+<textarea id="out" style="width: 100%; height: 100px;" readonly></textarea>
+</div>
+
+<div>
+<h3>Usage notes</h3>
+<ul>
+<li>Set the key path before or after selecting language files. Join the parts in the key path with a period (<code>.</code>).</li>
+<li>For example, to get the stage name "Scorch Gorge", the key path should be `<code>CommonMsg/VS/VSStageName.Yunohana</code>`.</li>
+<li>The file name should be in the form <code>JPja_full.json</code> or <code>JPja_full_unicode.json</code>.</li>
+<li>The file format should be the one as in Lean's splat3 repo.</li>
+</ul>
+</div>
+
+<script>
+'use strict';
+
+const LANGUAGE_CODE_MAP = {
+    "USen": "Eng",
+    "CNzh": "ChiS",
+    "EUde": "Ger",
+    "EUes": "SpaE",
+    "EUfr": "FraE",
+    "EUit": "Ita",
+    "EUnl": "Dut",
+    "EUru": "Rus",
+    "JPja": "Jap",
+    "KRko": "Kor",
+    "TWzh": "ChiT",
+    "USes": "SpaA",
+    "USfr": "FraA",
+};
+
+const LANGUAGE_ORDER = [
+    "USen",
+    "JPja",
+    "EUnl",
+    "EUfr",
+    "USfr",
+    "EUde",
+    "EUit",
+    "EUru",
+    "EUes",
+    "USes",
+    "CNzh",
+    "TWzh",
+    "KRko",
+];
+
+const LANG_NEEDS_ROMANIZE = {
+    "JPja": true,
+    "CNzh": true,
+    "TWzh": true,
+    "KRko": true,
+};
+
+/** @type {HTMLSelectElement} */
+const colourBox = document.getElementById("colour");
+/** @type {HTMLButtonElement} */
+const btnReset = document.getElementById("btnReset");
+/** @type {HTMLInputElement} */
+const engAsTitleBox = document.getElementById("engAsTitle");
+/** @type {HTMLInputElement} */
+const pathBox = document.getElementById("path");
+/** @type {HTMLInputElement} */
+const fileBox = document.getElementById("file");
+/** @type {HTMLTextAreaElement} */
+const outbox = document.getElementById("out");
+
+let langJson = {};
+
+/**
+ * @return {string | undefined}
+ */
+function value_from_json(json, /** @type {string[]} */ keyPathParts) {
+    for (let i = 0; i < keyPathParts.length && typeof json !== "undefined"; i++) {
+        json = json[keyPathParts[i]];
+    }
+    if (typeof json !== "string")
+        return undefined;
+    return json;
+}
+
+function update() {
+    outbox.value = "";
+    try {
+        let names = {};
+
+        const path = pathBox.value;
+        const pathParts = pathBox.value.split(".");
+        for (const langCode in langJson) {
+            let value = value_from_json(langJson[langCode], pathParts);
+            if (typeof value === "string")
+                names[langCode] = value;
+            else
+                console.warn(`Key path "${pathBox.value}" is not a string in the JSON for ${langCode}`);
+        }
+
+        if (!Object.keys(names).length) {
+            outbox.style.height = `100px`;
+            return;
+        }
+        outbox.value = `{{Localized name\n|color=${colourBox.value}\n`;
+
+        const sameFrench = ("EUfr" in names) && ("USfr" in names) && names["EUfr"] === names["USfr"];
+        const sameSpanish = ("EUes" in names) && ("USes" in names) && names["EUes"] === names["USes"];
+        for (const langICode of LANGUAGE_ORDER) {
+            let value = "";
+            if (langICode in names) {
+                value = names[langICode];
+            }
+            if (langICode === "USen") {
+                if (engAsTitleBox.checked) {
+                    outbox.value += `|title=${value}\n`;
+                }
+            } else {
+                let langWCode = LANGUAGE_CODE_MAP[langICode];
+                if (sameFrench) {
+                    if (langICode === "EUfr")
+                        langWCode = "Fra";
+                    else if (langICode === "USfr")
+                        continue;
+                }
+                if (sameSpanish) {
+                    if (langICode === "EUes")
+                        langWCode = "Spa";
+                    else if (langICode === "USes")
+                        continue;
+                }
+                outbox.value += `|${langWCode}=${value}\n`;
+                if (langICode in LANG_NEEDS_ROMANIZE) {
+                    outbox.value += `|${langWCode}R=\n`;
+                }
+                outbox.value += `|${langWCode}M=\n`;
+            }
+        }
+        outbox.value += "}}\n"
+    } catch (ex) {
+        outbox.value += "\nERROR:\n" + ex;
+    }
+    outbox.style.height = `${outbox.scrollHeight}px`;
+}
+
+fileBox.addEventListener("change", async event => {
+    for (let i = 0; i < fileBox.files.length; i++) {
+        let f = fileBox.files.item(i);
+        try {
+            let match = /^([A-Z]{2}[a-z]{2})(?:_full)?(?:_unicode)?\.json$/.exec(f.name)
+            if (!match) {
+                console.log("No exact file name match, trying fuzzy match.");
+                match = /\b([A-Z]{2}[a-z]{2})\b.*\.json$/.exec(f.name);
+            }
+            if (!match) {
+                console.warn(`Ignoring unknown file name format: ${f.name}`);
+                continue;
+            }
+            let maybeLangCode = match[1];
+            if (!(maybeLangCode in LANGUAGE_CODE_MAP)) {
+                console.warn(`Ignoring unknown language ${maybeLangCode}: ${f.name}`);
+                continue;
+            }
+            let json = JSON.parse(await f.text());
+            if (json)
+                langJson[maybeLangCode] = json;
+            else
+                console.warn(`Failed to parse JSON from ${f.name}`);
+        } catch (ex) {
+            console.error(`Failed to load language from ${f.name}`, ex);
+        }
+    }
+    fileBox.value = "";
+    update();
+});
+
+let pathBoxInputDebounce = null;
+function resetDebounce() {
+    if (pathBoxInputDebounce) {
+        clearTimeout(pathBoxInputDebounce);
+    }
+}
+
+btnReset.addEventListener("click", event => {
+    resetDebounce();
+    langJson = {};
+    update();
+});
+
+pathBox.addEventListener("input", event => {
+    resetDebounce();
+    pathBoxInputDebounce = setTimeout(() => {
+        pathBoxInputDebounce = null;
+        update();
+    }, 1000);
+});
+
+pathBox.addEventListener("change", event => {
+    resetDebounce();
+    update();
+});
+
+engAsTitleBox.addEventListener("change", event => {
+    resetDebounce();
+    update();
+});
+
+colourBox.addEventListener("change", event => {
+    resetDebounce();
+    update();
+});
+
+update();
+
+async function copy() {
+    if (!outbox.value.length)
+        return;
+    await navigator.clipboard.writeText(outbox.value);
+    outbox.select();
+}
+
+</script>
+</body>
+</html>
