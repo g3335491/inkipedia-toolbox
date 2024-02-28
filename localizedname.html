@@ -180,6 +180,7 @@ function update() {
     } catch (ex) {
         outbox.value += "\nERROR:\n" + ex;
     }
+    outbox.style.height = "0px";
     outbox.style.height = `${outbox.scrollHeight}px`;
 }
 
