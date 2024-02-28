@@ -29,6 +29,7 @@ div.form>* {
     <option value="Octo Expansion">Octo Expansion</option>
 </select>
 <label style="grid-column: 2;"><input type="checkbox" id="engAsTitle"> Use English name as title</label>
+<label style="grid-column: 2;"><input type="checkbox" id="lastAsInternal"> Use last key part as internal name</label>
 <label for="path">Key path</label>
 <input type="text" id="path">
 <label for="file" style="grid-row: span 2;">Language<br>files</label>
@@ -96,6 +97,8 @@ const colourBox = document.getElementById("colour");
 const btnReset = document.getElementById("btnReset");
 /** @type {HTMLInputElement} */
 const engAsTitleBox = document.getElementById("engAsTitle");
+/** @type {HTMLInputElement} */
+const lastAsInternalBox = document.getElementById("lastAsInternal");
 /** @type {HTMLInputElement} */
 const pathBox = document.getElementById("path");
 /** @type {HTMLInputElement} */
@@ -170,6 +173,9 @@ function update() {
                 outbox.value += `|${langWCode}M=\n`;
             }
         }
+        if (lastAsInternalBox.checked) {
+            outbox.value += `|Internal=${pathParts[pathParts.length - 1]}\n|InternalM=\n`;
+        }
         outbox.value += "}}\n"
     } catch (ex) {
         outbox.value += "\nERROR:\n" + ex;
@@ -235,6 +241,11 @@ pathBox.addEventListener("change", event => {
 });
 
 engAsTitleBox.addEventListener("change", event => {
+    resetDebounce();
+    update();
+});
+
+lastAsInternalBox.addEventListener("change", event => {
     resetDebounce();
     update();
 });
