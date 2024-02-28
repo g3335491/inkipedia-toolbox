@@ -6,10 +6,11 @@
 <style>
 div.form {
     display: grid;
-    grid-template-columns: min-content auto;
+    grid-template-columns: max-content auto;
 }
-div.form>label {
-    padding: 4px;
+div.form>* {
+    margin: 2px;
+    padding: 2px 4px;
 }
 </style>
 </head>
@@ -134,7 +135,7 @@ function update() {
         outbox.value = "";
         for (let box of split_dialogue(str)) {
             outbox.value += `{{MissionQuote|${charabox.value}|${msg_fmt_mediawiki(box)}}}\n`;
-        } 
+        }
     } catch (ex) {
         outbox.value += "\nERROR:\n" + ex;
     }
