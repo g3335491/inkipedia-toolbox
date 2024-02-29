@@ -6,17 +6,30 @@
 <style>
 div.form {
     display: grid;
-    grid-template-columns: max-content auto;
+    grid-template-columns: max-content 1fr;
 }
-div.form>* {
+div.form>*:not(.nested),
+div.form>.nested>* {
     margin: 2px;
     padding: 2px 4px;
+}
+div.form>.nested {
+    grid-column: span 2;
+    display:grid;
+    grid-template-columns: subgrid;
 }
 </style>
 </head>
 <body>
 
 <div class="form">
+<label for="file" style="grid-row: span 2;">Language<br>file</label>
+<input type="file" id="file">
+<button type="button" id="btnSearch" style="width: 200px; grid-column: 2;" disabled>Search</button>
+<div class="nested" id="manualInput">
+    <label for="in">Input<br><a href="javascript:paste()">(paste)</a></label>
+    <textarea id="in" style="height: 200px;" spellcheck="false"></textarea>
+</div>
 <label for="character">Character</label>
 <select id="character">
     <optgroup label="Splatoon">
@@ -80,14 +93,30 @@ div.form>* {
         <option value="SO|Smollusk">Smollusk</option>
     </optgroup>
 </select>
-<label for="in">Input<br><a href="javascript:paste()">(paste)</a></label>
-<textarea id="in" style="height: 200px;" spellcheck="false"></textarea>
 <label for="out">Output<br><a href="javascript:copy()">(copy)</a></label>
 <textarea id="out" style=" height: 200px;" readonly></textarea>
 </div>
 
+<dialog id="dlgSelectFromJson">
+    <div class="form">
+        <label for="dlgSelectFromJsonSearch">Search</label>
+        <input id="dlgSelectFromJsonSearch" type="text">
+        <table style="grid-column: span 2;">
+            <thead><tr><th>Key</th><th>Message</th></tr></thead>
+            <tbody id="dlgSelectFromJsonTbody"></tbody>
+        </table>
+    </div>
+</dialog>
+
 <script>
 'use strict';
+
+/**
+ * @returns {string}
+ */
+function escapeRegExp(/** @type {string} */ str) {
+    return str.replace(/[.*+?^${}()|\[\]\\]/g, "\\$&");
+}
 
 /**
  * @returns {string[]}
@@ -99,16 +128,34 @@ function split_dialogue(/** @type {string} */ msg) {
 /**
  * @returns {string}
  */
+function msg_strip_tags(/** @type {string} */ msg) {
+    msg = msg.replaceAll("\u000f\u0004\u0005", "");
+    msg = msg.replaceAll("\n", " ");
+    msg = msg.replaceAll("[page break]", "\n");
+    msg = msg.replace(/\[.+?\]/g, "");
+    return msg;
+}
+
+/**
+ * @returns {string}
+ */
 function msg_fmt_mediawiki(/** @type {string} */ msg, /** @type {string} */ lang = "USen") {
+    // Some weird tags
+    msg = msg.replaceAll("\u000f\u0004\u0005", "");
+    msg = msg.replaceAll("[group=0004 type=0005 params=]", "")
+
     // Pause
     msg = msg.replace(/\[group=0001 type=0000 params=[0-9a-f]{2} 00 00 00\]/g, "");
 
     // Remove consecutive color tags
     msg = msg.replace(/\[color=[0-9a-f]{4}\](\s*)(\[color=[0-9a-f]{4}\])/g, "$1$2");
-    // Remove repeated orange color tag
+    // Remove repeated SO orange color tag
     msg = msg.replace(/(\[color=0004\][^\[\]]*)\[color=0004\]/g, "$1");
-    // Orange color
+    // SO orange color
     msg = msg.replace(/\[color=0004\](.+?)( ?)\[color=ffff\]/gs, "{{Color|$1|DarkOrange}}$2");
+
+    // Normal orange color
+    msg = msg.replace(/\[color=0001\](.+?)( ?)\[color=ffff\]/gs, "{{Color|$1|Orange}}$2");
 
     // Icons
     msg = msg.replace(/\[group=0003 type=([0-9a-f]{4}) params=((?:[0-9a-f]{2} ){7}[0-9a-f]{2})\]/g, (match, p_type, p_params) => {
@@ -162,12 +209,124 @@ function msg_fmt_mediawiki(/** @type {string} */ msg, /** @type {string} */ lang
     return msg;
 }
 
+const dlgSelectFromJson = (function() {
+    /** @type {HTMLDialogElement} */
+    const dlg = document.getElementById("dlgSelectFromJson");
+    /** @type {HTMLInputElement} */
+    const searchBox = document.getElementById("dlgSelectFromJsonSearch");
+    /** @type {HTMLTableSectionElement} */
+    const tbody = document.getElementById("dlgSelectFromJsonTbody");
+
+    let search
+
+    function reset() {
+        searchBox.oninput = null;
+        searchBox.value = "";
+        tbody.innerHTML = "";
+        dlg.onclose = null;
+    }
+
+    // /** @return {}
+    async function open(json) {
+        reset();
+
+        function* search(text) {
+            const regex = new RegExp(escapeRegExp(text.replace(/\s*[,.?!]\s*/g, " ")).replaceAll(" ", "(?:\\b|\\s+)"), "i");
+            for (let key1 in json) {
+                for (let key2 in json[key1]) {
+                    // XXX: consider caching the stripped search msg...
+                    if (regex.test(msg_strip_tags(json[key1][key2]).replace(/[,.?!]/g, " "))) {
+                        yield [key1, key2, json[key1][key2]];
+                    }
+                }
+            }
+        }
+
+        let result = null;
+
+        let promise = new Promise((resolve, reject) => {
+
+            function appendResult(keyParts, msg) {
+                const tr = document.createElement("tr");
+                function appendCell(text) {
+                    const td = document.createElement("td");
+                    td.innerText = text;
+                    tr.appendChild(td);
+                    return td;
+                }
+                if (keyParts !== null) {
+                    const tdKey = appendCell(keyParts.join("."));
+                    const link = document.createElement("a");
+                    link.appendChild(tdKey.firstChild);
+                    link.href = "#";
+                    link.addEventListener("click", event => {
+                        event.preventDefault();
+                        result = keyParts;
+                        dlg.close();
+                    });
+                    tdKey.appendChild(link);
+                    appendCell(msg);
+                } else {
+                    const td = appendCell(msg);
+                    td.colSpan = 2;
+                    td.style.textAlign = "center";
+                }
+                tbody.appendChild(tr);
+            }
+
+            let searchDebounce = null;
+            searchBox.oninput = event => {
+                if (searchDebounce) {
+                    clearTimeout(searchDebounce);
+                }
+                searchDebounce = setTimeout(() => {
+                    searchDebounce = null;
+                    tbody.innerHTML = "";
+                    if (searchBox.value.trim().length < 3) {
+                        tbody.innerHTML = "";
+                        return;
+                    }
+                    let count = 0;
+                    for (const [key1, key2, msg] of search(searchBox.value.trim())) {
+                        if (count > 10) {
+                            appendResult(null, "(Too many results, stopping.)");
+                            break;
+                        }
+                        appendResult([key1, key2], msg);
+                        count++;
+                    }
+                    if (!count) {
+                        appendResult(null, "(No results.)");
+                    }
+                }, 1000);
+            };
+
+            dlg.onclose = event => {
+                resolve(result);
+            };
+
+            dlg.showModal();
+        });
+        const res = await promise;
+        reset();
+        return res;
+    }
+
+    return {
+        open,
+    };
+})(); /* dlgSelectFromJson */
+
+/** @type {HTMLInputElement} */
+const fileBox = document.getElementById("file");
 /** @type {HTMLTextAreaElement} */
 const inbox = document.getElementById("in");
 /** @type {HTMLTextAreaElement} */
 const outbox = document.getElementById("out");
 /** @type {HTMLSelectElement} */
 const charabox = document.getElementById("character");
+
+let curLangJson = null;
 
 function update() {
     let str = "";
@@ -189,18 +348,61 @@ function update() {
     } catch (ex) {
         outbox.value += "\nERROR:\n" + ex;
     }
+    outbox.style.height = "0px";
+    outbox.style.height = `${outbox.scrollHeight}px`;
 }
+
+async function searchInJson() {
+    if (!curLangJson)
+        return;
+    try {
+        const keyParts = await dlgSelectFromJson.open(curLangJson);
+        if (Array.isArray(keyParts)) {
+            inbox.select();
+            document.execCommand("insertText", false, JSON.stringify(curLangJson[keyParts[0]][keyParts[1]]));
+            // inbox.select();
+            outbox.select();
+        }
+    } catch (ex) {
+        inbox.select();
+        document.execCommand("insertText", false, `ERROR:\n${ex}\n`);
+        inbox.select();
+    }
+}
+
+fileBox.addEventListener("change", async event => {
+    curLangJson = null;
+    if (fileBox.files.length) {
+        let f = fileBox.files.item(0);
+        try {
+            let json = JSON.parse(await f.text());
+            if (json)
+                curLangJson = json;
+            else
+                console.warn(`Failed to parse JSON from ${f.name}`);
+        } catch (ex) {
+            console.error(`Failed to load language from ${f.name}`, ex);
+        }
+    }
+    if (curLangJson) {
+        btnSearch.disabled = false;
+        searchInJson();
+    }
+});
 
 inbox.addEventListener("change", event => {
     update();
 });
 
 inbox.addEventListener("input", event => {
+    inbox.style.height = "0px";
+    inbox.style.height = `${inbox.scrollHeight}px`;
     update();
 });
 
 charabox.addEventListener("change", event => {
     update();
+    outbox.select();
 });
 
 update();
