@@ -21,8 +21,19 @@ div.form>.nested {
     display:grid;
     grid-template-columns: subgrid;
 }
+table {
+    border-collapse: collapse;
+}
+th, td {
+    padding: 2px 4px;
+}
 #nearbyMessages>.lastPicked {
     background-color: light-dark(lightyellow, olive);
+}
+#nearbyMessages>tr:hover,
+#dlgSelectFromJsonTbody>tr:hover {
+    background-color: light-dark(lightblue, darkblue);
+    cursor: pointer;
 }
 </style>
 </head>
@@ -271,20 +282,24 @@ const dlgSelectFromJson = (function() {
                 }
                 if (keyParts !== null) {
                     const tdKey = appendCell(keyParts.join("."));
-                    const link = document.createElement("a");
-                    link.appendChild(tdKey.firstChild);
-                    link.href = "#";
-                    link.addEventListener("click", event => {
+                    const clickHandler = event => {
+                        console.log("aaaa");
                         event.preventDefault();
                         result = keyParts;
                         dlg.close();
-                    });
+                    };
+                    const link = document.createElement("a");
+                    link.appendChild(tdKey.firstChild);
+                    link.href = "#";
+                    link.addEventListener("click", clickHandler);
+                    tr.addEventListener("click", clickHandler);
                     tdKey.appendChild(link);
                     appendCell(msg);
                 } else {
                     const td = appendCell(msg);
                     td.colSpan = 2;
                     td.style.textAlign = "center";
+                    tr.style.pointerEvents = "none";
                 }
                 tbody.appendChild(tr);
             }
@@ -391,10 +406,7 @@ async function searchInJson() {
                 }
                 if (keyParts !== null) {
                     const tdKey = appendCell(keyParts[1]);
-                    const link = document.createElement("a");
-                    link.appendChild(tdKey.firstChild);
-                    link.href = "#";
-                    link.addEventListener("click", event => {
+                    const clickHandler = event => {
                         event.preventDefault();
                         document.querySelector("#nearbyMessages>.lastPicked")?.classList.remove("lastPicked");
                         tr.classList.add("lastPicked");
@@ -402,7 +414,12 @@ async function searchInJson() {
                         document.execCommand("insertText", false, JSON.stringify(curLangJson[keyParts[0]][keyParts[1]]));
                         // inbox.select();
                         outbox.select();
-                    });
+                    };
+                    const link = document.createElement("a");
+                    link.appendChild(tdKey.firstChild);
+                    link.href = "#";
+                    link.addEventListener("click", clickHandler);
+                    tr.addEventListener("click", clickHandler);
                     tdKey.appendChild(link);
                     appendCell(msg);
                 } else {
