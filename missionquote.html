@@ -35,6 +35,9 @@ th, td {
     background-color: light-dark(lightblue, darkblue);
     cursor: pointer;
 }
+input:invalid {
+    background-color: light-dark(pink, darkred);
+}
 </style>
 </head>
 <body>
@@ -44,6 +47,8 @@ th, td {
 <input type="file" id="file">
 <button type="button" id="btnSearch" style="width: 200px; grid-column: 2;" disabled>Search</button>
 <div class="nested" id="selectInFile" style="display: none;">
+    <label for="path">Key path</label>
+    <input type="text" id="path">
     <label>Messages</label>
     <div style="max-height: 400px; overflow-y: scroll; border: 1px solid gray;">
         <table>
@@ -283,7 +288,6 @@ const dlgSelectFromJson = (function() {
                 if (keyParts !== null) {
                     const tdKey = appendCell(keyParts.join("."));
                     const clickHandler = event => {
-                        console.log("aaaa");
                         event.preventDefault();
                         result = keyParts;
                         dlg.close();
@@ -353,6 +357,8 @@ const fileBox = document.getElementById("file");
 const btnSearch = document.getElementById("btnSearch");
 /** @type {HTMLDivElement} */
 const selectInFileBox = document.getElementById("selectInFile");
+/** @type {HTMLInputElement} */
+const pathBox = document.getElementById("path");
 /** @type {HTMLTextAreaElement} */
 const inbox = document.getElementById("in");
 /** @type {HTMLTextAreaElement} */
@@ -363,6 +369,7 @@ const charabox = document.getElementById("character");
 const nearbyMessagesTbody = document.getElementById("nearbyMessages");
 
 let curLangJson = null;
+let curKeyParts = null;
 
 function update() {
     let str = "";
@@ -388,73 +395,120 @@ function update() {
     outbox.style.height = `${outbox.scrollHeight}px`;
 }
 
+function selectFromJson(/** {string[]} */ keyParts) {
+    pathBox.setCustomValidity("");
+    const keyPath = keyParts.join(".");
+    if (curKeyParts?.join(".") === keyPath) {
+        return;
+    }
+    const sameFirstPart = curKeyParts?.[0] === keyParts[0];
+    curKeyParts = keyParts;
+    pathBox.value = keyPath;
+
+    if (sameFirstPart) {
+        nearbyMessagesTbody.querySelector(":scope>.lastPicked")?.classList.remove("lastPicked");
+        for (let tr of nearbyMessagesTbody.children) {
+            if (tr.dataset.keyPath === keyPath) {
+                tr.classList.add("lastPicked");
+                tr.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" });
+            }
+        }
+    } else {
+        const tbody = nearbyMessagesTbody;
+
+        function appendNearby(keyParts, msg) {
+            const tr = document.createElement("tr");
+            function appendCell(text) {
+                const td = document.createElement("td");
+                td.innerText = text;
+                tr.appendChild(td);
+                return td;
+            }
+            if (keyParts !== null) {
+                const tdKey = appendCell(keyParts[1]);
+                const clickHandler = event => {
+                    event.preventDefault();
+                    selectFromJson(keyParts);
+                };
+                const link = document.createElement("a");
+                link.appendChild(tdKey.firstChild);
+                link.href = "#";
+                link.addEventListener("click", clickHandler);
+                tr.addEventListener("click", clickHandler);
+                tr.dataset.keyPath = keyParts.join(".");
+                tdKey.appendChild(link);
+                appendCell(msg);
+            } else {
+                const td = appendCell(msg);
+                td.colSpan = 2;
+                td.style.textAlign = "center";
+            }
+            tbody.appendChild(tr);
+            return tr;
+        }
+
+        tbody.innerHTML = "";
+        let current = null;
+        for (const key2 in curLangJson[keyParts[0]]) {
+            const tr = appendNearby([keyParts[0], key2], curLangJson[keyParts[0]][key2]);
+            if (key2 === keyParts[1]) {
+                current = tr;
+            }
+        }
+
+        selectInFileBox.style.display = null;
+        if (current) {
+            current.classList.add("lastPicked");
+            current.scrollIntoView({ behavior: "smooth", block: "center", inline: "start" });
+        }
+    }
+
+    inbox.select();
+    document.execCommand("insertText", false, JSON.stringify(curLangJson[keyParts[0]][keyParts[1]]));
+    // inbox.select();
+    outbox.select();
+}
+
 async function searchInJson() {
     if (!curLangJson)
         return;
     try {
         const keyParts = await dlgSelectFromJson.open(curLangJson);
         if (Array.isArray(keyParts)) {
-            const tbody = nearbyMessagesTbody;
-
-            function appendNearby(keyParts, msg) {
-                const tr = document.createElement("tr");
-                function appendCell(text) {
-                    const td = document.createElement("td");
-                    td.innerText = text;
-                    tr.appendChild(td);
-                    return td;
-                }
-                if (keyParts !== null) {
-                    const tdKey = appendCell(keyParts[1]);
-                    const clickHandler = event => {
-                        event.preventDefault();
-                        document.querySelector("#nearbyMessages>.lastPicked")?.classList.remove("lastPicked");
-                        tr.classList.add("lastPicked");
-                        inbox.select();
-                        document.execCommand("insertText", false, JSON.stringify(curLangJson[keyParts[0]][keyParts[1]]));
-                        // inbox.select();
-                        outbox.select();
-                    };
-                    const link = document.createElement("a");
-                    link.appendChild(tdKey.firstChild);
-                    link.href = "#";
-                    link.addEventListener("click", clickHandler);
-                    tr.addEventListener("click", clickHandler);
-                    tdKey.appendChild(link);
-                    appendCell(msg);
-                } else {
-                    const td = appendCell(msg);
-                    td.colSpan = 2;
-                    td.style.textAlign = "center";
-                }
-                tbody.appendChild(tr);
-                return tr;
-            }
-
-            tbody.innerHTML = "";
-            let current = null;
-            for (const key2 in curLangJson[keyParts[0]]) {
-                const tr = appendNearby([keyParts[0], key2], curLangJson[keyParts[0]][key2]);
-                if (key2 === keyParts[1]) {
-                    current = tr;
-                }
-            }
-
-            selectInFileBox.style.display = null;
-            if (current) {
-                current.classList.add("lastPicked");
-                current.scrollIntoView({ behavior: "smooth", block: "center", inline: "start" });
-            }
-
-            inbox.select();
-            document.execCommand("insertText", false, JSON.stringify(curLangJson[keyParts[0]][keyParts[1]]));
-            // inbox.select();
-            outbox.select();
+            selectFromJson(keyParts);
         }
     } catch (ex) {
         inbox.select();
         document.execCommand("insertText", false, `ERROR:\n${ex}\n`);
         inbox.select();
+    }
+}
+
+function keyPathInputChanged() {
+    if (!curLangJson) {
+        pathBox.value = "";
+        return;
+    }
+    const path = pathBox.value;
+    const pathParts = pathBox.value.split(".");
+    let ok = false;
+    if (pathParts.length === 2) {
+        if (curLangJson[pathParts[0]]?.[pathParts[1]]) {
+            selectFromJson(pathParts);
+            ok = true;
+        }
+    } else if (pathParts.length === 1) {
+        const group = curLangJson[pathParts[0]];
+        if (group) {
+            const key2 = Object.keys(group)[0];
+            if (key2) {
+                selectFromJson([pathParts[0], key2]);
+                ok = true;
+            }
+        }
+    }
+    if (!ok) {
+        pathBox.setCustomValidity("error");
     }
 }
 
@@ -480,6 +534,26 @@ fileBox.addEventListener("change", async event => {
 
 btnSearch.addEventListener("click", event => {
     searchInJson();
+});
+
+// let pathBoxInputDebounce = null;
+// function resetPathBoxDebounce() {
+//     if (pathBoxInputDebounce) {
+//         clearTimeout(pathBoxInputDebounce);
+//     }
+// }
+
+// pathBox.addEventListener("input", event => {
+//     resetPathBoxDebounce();
+//     pathBoxInputDebounce = setTimeout(() => {
+//         pathBoxInputDebounce = null;
+//         keyPathInputChanged();
+//     }, 1000);
+// });
+
+pathBox.addEventListener("change", event => {
+    // resetPathBoxDebounce();
+    keyPathInputChanged();
 });
 
 inbox.addEventListener("change", event => {
