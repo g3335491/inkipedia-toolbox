@@ -4,13 +4,39 @@
 <title>Localized name - Inkipedia Toolbox</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
+:root {
+    color-scheme: light dark;
+}
 div.form {
     display: grid;
     grid-template-columns: max-content 1fr;
 }
-div.form>* {
+div.form>*:not(.nested),
+div.form>.nested>* {
     margin: 2px;
     padding: 2px 4px;
+}
+div.form>.nested {
+    grid-column: span 2;
+    display:grid;
+    grid-template-columns: subgrid;
+}
+table {
+    border-collapse: collapse;
+}
+th, td {
+    padding: 2px 4px;
+}
+#nearbyMessages>.lastPicked {
+    background-color: light-dark(lightyellow, olive);
+}
+#nearbyMessages>tr:hover,
+#dlgSelectFromJsonTbody>tr:hover {
+    background-color: light-dark(lightblue, darkblue);
+    cursor: pointer;
+}
+input:invalid {
+    background-color: light-dark(pink, darkred);
 }
 </style>
 </head>
@@ -30,11 +56,23 @@ div.form>* {
 </select>
 <label style="grid-column: 2;"><input type="checkbox" id="engAsTitle"> Use English name as title</label>
 <label style="grid-column: 2;"><input type="checkbox" id="lastAsInternal"> Use last key part as internal name</label>
-<label for="path">Key path</label>
-<input type="text" id="path">
 <label for="file" style="grid-row: span 2;">Language<br>files</label>
 <input type="file" id="file" multiple>
-<button type="button" id="btnReset" style="width: 200px; grid-column: 2;">Clear language files</button>
+<div class="nested" style="grid-column: 2; grid-template-columns: 0fr 0fr 0fr;">
+    <select id="searchLang">
+    </select>
+    <button type="button" id="btnSearch" style="width: 200px;" disabled>Search</button>
+    <button type="button" id="btnReset" style="width: 200px;">Clear language files</button>
+</div>
+<label for="path">Key path</label>
+<input type="text" id="path">
+<label>Messages</label>
+<div style="max-height: 200px; overflow-y: scroll; border: 1px solid gray;">
+    <table>
+        <thead><tr><th>Key</th><th>Message</th></tr></thead>
+        <tbody id="nearbyMessages"></tbody>
+    </table>
+</div>
 <label for="out">Output<br><a href="javascript:copy()">(copy)</a></label>
 <textarea id="out" style="height: 100px;" readonly></textarea>
 </div>
@@ -49,8 +87,155 @@ div.form>* {
 </ul>
 </div>
 
+<dialog id="dlgSelectFromJson">
+    <div class="form">
+        <label for="dlgSelectFromJsonSearch">Search</label>
+        <input id="dlgSelectFromJsonSearch" type="text">
+        <table style="grid-column: span 2;">
+            <thead><tr><th>Key</th><th>Message</th></tr></thead>
+            <tbody id="dlgSelectFromJsonTbody"></tbody>
+        </table>
+    </div>
+</dialog>
+
 <script>
 'use strict';
+
+/**
+ * @returns {string}
+ */
+function escapeRegExp(/** @type {string} */ str) {
+    return str.replace(/[.*+?^${}()|\[\]\\]/g, "\\$&");
+}
+
+/**
+ * @returns {string[]}
+ */
+function split_dialogue(/** @type {string} */ msg) {
+    return msg.split("[page break]");
+}
+
+/**
+ * @returns {string}
+ */
+function msg_strip_tags(/** @type {string} */ msg) {
+    msg = msg.replaceAll("\u000f\u0004\u0005", "");
+    msg = msg.replaceAll("\n", " ");
+    msg = msg.replaceAll("[page break]", "\n");
+    msg = msg.replace(/\[.+?\]/g, "");
+    return msg;
+}
+
+const dlgSelectFromJson = (function() {
+    /** @type {HTMLDialogElement} */
+    const dlg = document.getElementById("dlgSelectFromJson");
+    /** @type {HTMLInputElement} */
+    const searchBox = document.getElementById("dlgSelectFromJsonSearch");
+    /** @type {HTMLTableSectionElement} */
+    const tbody = document.getElementById("dlgSelectFromJsonTbody");
+
+    let search
+
+    function reset() {
+        searchBox.oninput = null;
+        searchBox.value = "";
+        tbody.innerHTML = "";
+        dlg.onclose = null;
+    }
+
+    /** @return {Promise<string[] | null>} the selected key parts */
+    async function open(json) {
+        reset();
+
+        function* search(text) {
+            const regex = new RegExp(escapeRegExp(text.replace(/\s*[,.?!]\s*/g, " ")).replaceAll(" ", "(?:\\b|\\s+)"), "i");
+            for (let key1 in json) {
+                for (let key2 in json[key1]) {
+                    // XXX: consider caching the stripped search msg...
+                    if (regex.test(msg_strip_tags(json[key1][key2]).replace(/[,.?!]/g, " "))) {
+                        yield [key1, key2, json[key1][key2]];
+                    }
+                }
+            }
+        }
+
+        let result = null;
+
+        let promise = new Promise((resolve, reject) => {
+
+            function appendResult(keyParts, msg) {
+                const tr = document.createElement("tr");
+                function appendCell(text) {
+                    const td = document.createElement("td");
+                    td.innerText = text;
+                    tr.appendChild(td);
+                    return td;
+                }
+                if (keyParts !== null) {
+                    const tdKey = appendCell(keyParts.join("."));
+                    const clickHandler = event => {
+                        event.preventDefault();
+                        result = keyParts;
+                        dlg.close();
+                    };
+                    const link = document.createElement("a");
+                    link.appendChild(tdKey.firstChild);
+                    link.href = "#";
+                    link.addEventListener("click", clickHandler);
+                    tr.addEventListener("click", clickHandler);
+                    tdKey.appendChild(link);
+                    appendCell(msg);
+                } else {
+                    const td = appendCell(msg);
+                    td.colSpan = 2;
+                    td.style.textAlign = "center";
+                    tr.style.pointerEvents = "none";
+                }
+                tbody.appendChild(tr);
+            }
+
+            let searchDebounce = null;
+            searchBox.oninput = event => {
+                if (searchDebounce) {
+                    clearTimeout(searchDebounce);
+                }
+                searchDebounce = setTimeout(() => {
+                    searchDebounce = null;
+                    tbody.innerHTML = "";
+                    if (searchBox.value.trim().length < 3) {
+                        tbody.innerHTML = "";
+                        return;
+                    }
+                    let count = 0;
+                    for (const [key1, key2, msg] of search(searchBox.value.trim())) {
+                        if (count > 10) {
+                            appendResult(null, "(Too many results, stopping.)");
+                            break;
+                        }
+                        appendResult([key1, key2], msg);
+                        count++;
+                    }
+                    if (!count) {
+                        appendResult(null, "(No results.)");
+                    }
+                }, 1000);
+            };
+
+            dlg.onclose = event => {
+                resolve(result);
+            };
+
+            dlg.showModal();
+        });
+        const res = await promise;
+        reset();
+        return res;
+    }
+
+    return {
+        open,
+    };
+})(); /* dlgSelectFromJson */
 
 const LANGUAGE_CODE_MAP = {
     "USen": "Eng",
@@ -104,10 +289,24 @@ const lastAsInternalBox = document.getElementById("lastAsInternal");
 const pathBox = document.getElementById("path");
 /** @type {HTMLInputElement} */
 const fileBox = document.getElementById("file");
+/** @type {HTMLSelectElement} */
+const searchLangBox = document.getElementById("searchLang");
+/** @type {HTMLButtonElement} */
+const btnSearch = document.getElementById("btnSearch");
+/** @type {HTMLTableSectionElement} */
+const nearbyMessagesTbody = document.getElementById("nearbyMessages");
 /** @type {HTMLTextAreaElement} */
 const outbox = document.getElementById("out");
 
 let langJson = {};
+let curKeyParts = null;
+
+for (let lang of LANGUAGE_ORDER) {
+    const opt = document.createElement("option");
+    opt.innerText = lang;
+    opt.value = lang;
+    searchLangBox.appendChild(opt);
+}
 
 /**
  * @return {string | undefined}
@@ -123,6 +322,7 @@ function value_from_json(json, /** @type {string[]} */ keyPathParts) {
 
 function update() {
     outbox.value = "";
+    btnSearch.disabled = !langJson[searchLangBox.value];
     try {
         let names = {};
 
@@ -138,6 +338,7 @@ function update() {
 
         if (!Object.keys(names).length) {
             outbox.style.height = `100px`;
+            pathBox.setCustomValidity("error");
             return;
         }
         outbox.value = `{{Localized name\n|color=${colourBox.value}\n`;
@@ -181,8 +382,119 @@ function update() {
     } catch (ex) {
         outbox.value += "\nERROR:\n" + ex;
     }
-    outbox.style.height = "0px";
-    outbox.style.height = `${outbox.scrollHeight}px`;
+    outbox.style.height = `${outbox.scrollHeight - (outbox.offsetHeight - outbox.clientHeight)}px`;
+    pathBox.setCustomValidity("");
+}
+
+function selectFromJson(/** {string[]} */ keyParts, curLangJson) {
+    pathBox.setCustomValidity("");
+    const keyPath = keyParts.join(".");
+    if (curKeyParts?.join(".") === keyPath) {
+        return;
+    }
+    const sameFirstPart = curKeyParts?.[0] === keyParts[0];
+    curKeyParts = keyParts;
+    pathBox.value = keyPath;
+
+    if (sameFirstPart) {
+        nearbyMessagesTbody.querySelector(":scope>.lastPicked")?.classList.remove("lastPicked");
+        for (let tr of nearbyMessagesTbody.children) {
+            if (tr.dataset.keyPath === keyPath) {
+                tr.classList.add("lastPicked");
+                tr.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" });
+            }
+        }
+    } else {
+        const tbody = nearbyMessagesTbody;
+
+        function appendNearby(keyParts, msg) {
+            const tr = document.createElement("tr");
+            function appendCell(text) {
+                const td = document.createElement("td");
+                td.innerText = text;
+                tr.appendChild(td);
+                return td;
+            }
+            if (keyParts !== null) {
+                const tdKey = appendCell(keyParts[1]);
+                const clickHandler = event => {
+                    event.preventDefault();
+                    selectFromJson(keyParts);
+                };
+                const link = document.createElement("a");
+                link.appendChild(tdKey.firstChild);
+                link.href = "#";
+                link.addEventListener("click", clickHandler);
+                tr.addEventListener("click", clickHandler);
+                tr.dataset.keyPath = keyParts.join(".");
+                tdKey.appendChild(link);
+                appendCell(msg);
+            } else {
+                const td = appendCell(msg);
+                td.colSpan = 2;
+                td.style.textAlign = "center";
+            }
+            tbody.appendChild(tr);
+            return tr;
+        }
+
+        tbody.innerHTML = "";
+        let current = null;
+        for (const key2 in curLangJson[keyParts[0]]) {
+            const tr = appendNearby([keyParts[0], key2], curLangJson[keyParts[0]][key2]);
+            if (key2 === keyParts[1]) {
+                current = tr;
+            }
+        }
+
+        if (current) {
+            current.classList.add("lastPicked");
+            current.scrollIntoView({ behavior: "smooth", block: "center", inline: "start" });
+        }
+    }
+
+    update();
+}
+
+async function searchInJson() {
+    if (!langJson[searchLangBox.value])
+        return;
+    try {
+        const keyParts = await dlgSelectFromJson.open(langJson[searchLangBox.value]);
+        if (Array.isArray(keyParts)) {
+            selectFromJson(keyParts, langJson[searchLangBox.value]);
+        }
+    } catch (ex) {
+        outbox.value = `ERROR:\n${ex}\n`;
+    }
+}
+
+function keyPathInputChanged() {
+    btnSearch.disabled = !langJson[searchLangBox.value];
+    if (!langJson[searchLangBox.value]) {
+        return;
+    }
+    const path = pathBox.value;
+    const pathParts = pathBox.value.split(".");
+    let ok = false;
+    if (pathParts.length === 2) {
+        if (langJson[searchLangBox.value]?.[pathParts[0]]?.[pathParts[1]]) {
+            selectFromJson(pathParts, langJson[searchLangBox.value]);
+            ok = true;
+        }
+    } else if (pathParts.length === 1) {
+        const group = langJson[searchLangBox.value]?.[pathParts[0]];
+        if (group) {
+            const key2 = Object.keys(group)[0];
+            if (key2) {
+                selectFromJson([pathParts[0], key2], langJson[searchLangBox.value]);
+                ok = true;
+            }
+        }
+    }
+    if (!ok) {
+        pathBox.setCustomValidity("error");
+    }
 }
 
 fileBox.addEventListener("change", async event => {
@@ -213,7 +525,7 @@ fileBox.addEventListener("change", async event => {
         }
     }
     fileBox.value = "";
-    update();
+    keyPathInputChanged();
 });
 
 let pathBoxInputDebounce = null;
@@ -226,6 +538,8 @@ function resetDebounce() {
 btnReset.addEventListener("click", event => {
     resetDebounce();
     langJson = {};
+    nearbyMessagesTbody.innerHTML = "";
+    curKeyParts = null;
     update();
 });
 
@@ -233,13 +547,17 @@ pathBox.addEventListener("input", event => {
     resetDebounce();
     pathBoxInputDebounce = setTimeout(() => {
         pathBoxInputDebounce = null;
-        update();
+        keyPathInputChanged();
     }, 1000);
 });
 
 pathBox.addEventListener("change", event => {
     resetDebounce();
-    update();
+    keyPathInputChanged();
+});
+
+btnSearch.addEventListener("click", event => {
+    searchInJson();
 });
 
 engAsTitleBox.addEventListener("change", event => {
@@ -256,6 +574,12 @@ colourBox.addEventListener("change", event => {
     resetDebounce();
     update();
 });
+
+searchLangBox.addEventListener("change", event => {
+    nearbyMessagesTbody.innerHTML = "";
+    curKeyParts = null;
+    keyPathInputChanged();
+})
 
 update();
 
