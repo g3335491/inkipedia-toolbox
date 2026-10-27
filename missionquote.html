@@ -147,6 +147,8 @@ input:invalid {
 <script>
 'use strict';
 
+let curGame = "";
+
 /**
  * @returns {string}
  */
@@ -182,6 +184,14 @@ function msg_fmt_mediawiki(/** @type {string} */ msg, /** @type {string} */ lang
 
     // Pause
     msg = msg.replace(/\[group=0001 type=0000 params=[0-9a-f]{2} 00 00 00\]/g, "");
+
+    if (curGame == "Raiders") {
+        // Remove unknown tags
+        msg = msg.replace(/\[group=0001 type=0001 params=[0-9a-f ]+\]/g, "");
+    }
+
+    // Replace Ruby with comment
+    msg = msg.replace(/\[ruby="([^"]+)"\](.+?)\[\/ruby\]/gs, "$2<!--($1)-->");
 
     // Remove consecutive color tags
     msg = msg.replace(/\[color=[0-9a-f]{4}\](\s*)(\[color=[0-9a-f]{4}\])/g, "$1$2");
@@ -246,7 +256,6 @@ function msg_fmt_mediawiki(/** @type {string} */ msg, /** @type {string} */ lang
 
     if (msg.indexOf("[") >= 0) {
         console.error(`unprocessed tag in:\n${JSON.stringify(msg)}`);
-        alert("Output may contain unprocessed tags, please check!");
     }
 
     // line breaks
@@ -421,7 +430,8 @@ const nearbyMessagesTbody = document.getElementById("nearbyMessages");
 
 let curLangJson = null;
 let curKeyParts = null;
-let curGame = charabox.value.split("|")[0];
+
+fileBox.value = "";
 
 function update() {
     let str = "";
@@ -436,6 +446,7 @@ function update() {
         return;
     }
     curGame = charabox.value.split("|")[0];
+    console.log("curGame:", curGame);
     try {
         outbox.value = "";
         for (let box of split_dialogue(str)) {
