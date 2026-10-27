@@ -208,10 +208,41 @@ function msg_fmt_mediawiki(/** @type {string} */ msg, /** @type {string} */ lang
             if (p_type in iconsS3) {
                 return iconsS3[p_type];
             }
+        } else if (curGame === "Raiders") {
+            const iconsRaiders = {
+                "0000": "{{Button|A|Raiders}}",
+                "0001": "{{Button|B|Raiders}}",
+                "0002": "{{Button|X|Raiders}}",
+                "0003": "{{Button|Y|Raiders}}",
+                "0004": "{{Button|Plus|Raiders}}",
+                "0005": "{{Button|Minus|Raiders}}",
+                "0006": "{{Button|L|Raiders}}",
+                "0007": "{{Button|R|Raiders}}",
+                "0008": "{{Button|ZL|Raiders}}",
+                "0009": "{{Button|ZR|Raiders}}",
+                "000a": "{{Button|Left Stick|Raiders}}",
+                "000b": "{{Button|Right Stick|Raiders}}",
+                "0012": "<!-- icon for squid/octopus swim form -->",
+                "0014": "<!-- icon for squid/octopus swim (diagonal) -->",
+                "0016": "<!-- icon for reticle -->",
+                "0017": "{{Tank|Tactical|icononly|nolink}}",
+                "0018": "{{Tank|Power|icononly|nolink}}",
+                "0019": "{{Tank|Speed|icononly|nolink}}",
+                "001a": "{{Icon|Raiders|Power Egg}}",
+                "001e": "{{Icon|Raiders|Spirhalite Shard}}",
+                "001f": "{{Icon|Raiders|Skill Point}}",
+                "0020": "<!-- icon for 5-star rarity -->",
+                "0021": "<!-- icon for ink (tank) -->",
+                "0022": "{{Icon|Raiders|Chum}}",
+                "0023": "<!-- icon for 4-star rarity -->",
+            };
+            if (p_type in iconsRaiders) {
+                return iconsRaiders[p_type];
+            }
         }
         // TODO: Handle Raiders icons
         console.error(`unhandled icon ${p_type} in:\n${JSON.stringify(msg)}`);
-        return "<!-- unknown icon ${p_type} -->";
+        return `<!-- unknown icon ${p_type} -->`;
     });
 
     if (msg.indexOf("[") >= 0) {
