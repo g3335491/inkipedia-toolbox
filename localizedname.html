@@ -126,6 +126,20 @@ function msg_strip_tags(/** @type {string} */ msg) {
     return msg;
 }
 
+class CancellationToken {
+    #cancelled = false;
+    cancel() {
+        this.#cancelled = true;
+    }
+    isCancelled() {
+        return this.#cancelled;
+    }
+    throwIfCancelled() {
+        if (this.#cancelled)
+            throw "Cancelled";
+    }
+}
+
 const dlgSelectFromJson = (function() {
     /** @type {HTMLDialogElement} */
     const dlg = document.getElementById("dlgSelectFromJson");
@@ -147,13 +161,25 @@ const dlgSelectFromJson = (function() {
     async function open(json) {
         reset();
 
-        function* search(text) {
+        /**
+         * @param cancellationToken {CancellationToken}
+         */
+        async function* search(text, cancellationToken) {
+            let sleepIter = 0;
             const regex = new RegExp(escapeRegExp(text.replace(/\s*[,.?!\-_]\s*/g, " ")).replaceAll(" ", "(?:\\b|\\s+)"), "i");
             for (let key1 in json) {
                 for (let key2 in json[key1]) {
                     // XXX: consider caching the stripped search msg...
                     if (regex.test(msg_strip_tags(json[key1][key2]).replace(/[,.?!\-_]/g, " "))) {
                         yield [key1, key2, json[key1][key2]];
+                    }
+                    if (++sleepIter >= 1000) {
+                        sleepIter = 0;
+                        console.log("sleep...");
+                        await new Promise(resolve => {
+                            setTimeout(resolve, 20);
+                        });
+                        cancellationToken.throwIfCancelled();
                     }
                 }
             }
@@ -194,31 +220,36 @@ const dlgSelectFromJson = (function() {
                 tbody.appendChild(tr);
             }
 
-            let searchDebounce = null;
-            searchBox.oninput = event => {
-                if (searchDebounce) {
-                    clearTimeout(searchDebounce);
+            let searchCancellationToken = null;
+            searchBox.oninput = async event => {
+                if (searchCancellationToken) {
+                    searchCancellationToken.cancel();
+                    searchCancellationToken = null;
                 }
-                searchDebounce = setTimeout(() => {
-                    searchDebounce = null;
-                    tbody.innerHTML = "";
-                    if (searchBox.value.trim().length < 3) {
-                        tbody.innerHTML = "";
-                        return;
-                    }
-                    let count = 0;
-                    for (const [key1, key2, msg] of search(searchBox.value.trim())) {
-                        if (count > 10) {
-                            appendResult(null, "(Too many results, stopping.)");
-                            break;
-                        }
-                        appendResult([key1, key2], msg);
-                        count++;
-                    }
-                    if (!count) {
-                        appendResult(null, "(No results.)");
-                    }
-                }, 1000);
+                let ct = new CancellationToken();
+                searchCancellationToken = ct;
+
+                tbody.innerHTML = "";
+                if (searchBox.value.trim().length < 1) {
+                    return;
+                }
+
+                // Debounce:
+                await new Promise(resolve => {
+                    setTimeout(resolve, 500);
+                });
+
+                // ct.throwIfCancelled();
+                if (ct.isCancelled()) return;
+
+                let count = 0;
+                for await (const [key1, key2, msg] of search(searchBox.value.trim(), ct)) {
+                    appendResult([key1, key2], msg);
+                    count++;
+                }
+                if (!count) {
+                    appendResult(null, "(No results.)");
+                }
             };
 
             dlg.onclose = event => {
