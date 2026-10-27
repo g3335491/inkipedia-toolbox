@@ -257,16 +257,16 @@ const dlgSelectFromJson = (function() {
         dlg.onclose = null;
     }
 
-    // /** @return {}
+    /** @return {Promise<string[] | null>} the selected key parts */
     async function open(json) {
         reset();
 
         function* search(text) {
-            const regex = new RegExp(escapeRegExp(text.replace(/\s*[,.?!]\s*/g, " ")).replaceAll(" ", "(?:\\b|\\s+)"), "i");
+            const regex = new RegExp(escapeRegExp(text.replace(/\s*[,.?!\-_]\s*/g, " ")).replaceAll(" ", "(?:\\b|\\s+)"), "i");
             for (let key1 in json) {
                 for (let key2 in json[key1]) {
                     // XXX: consider caching the stripped search msg...
-                    if (regex.test(msg_strip_tags(json[key1][key2]).replace(/[,.?!]/g, " "))) {
+                    if (regex.test(msg_strip_tags(json[key1][key2]).replace(/[,.?!\-_]/g, " "))) {
                         yield [key1, key2, json[key1][key2]];
                     }
                 }
