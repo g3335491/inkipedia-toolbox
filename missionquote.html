@@ -604,6 +604,8 @@ fileBox.addEventListener("change", async event => {
     }
     if (curLangJson) {
         btnSearch.disabled = false;
+        curKeyParts = null;
+        keyPathInputChanged();
         searchInJson();
     }
 });
