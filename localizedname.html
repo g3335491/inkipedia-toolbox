@@ -502,6 +502,8 @@ function update() {
         const sameFrench = ("EUfr" in names) && ("USfr" in names) && names["EUfr"] === names["USfr"];
         const sameSpanish = ("EUes" in names) && ("USes" in names) && names["EUes"] === names["USes"];
         for (const langICode of LANGUAGE_ORDER) {
+            if (curGame === "Raiders" && langICode === "EUru" && !("EUru" in names))
+                continue;
             let value = "";
             if (langICode in names) {
                 value = names[langICode];
