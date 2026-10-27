@@ -11,6 +11,9 @@ div.form {
     display: grid;
     grid-template-columns: max-content 1fr;
 }
+dlgSelectFromJsonTbody>div.form {
+    grid-template-columns: max-content 1fr max-content;
+}
 div.form>*:not(.nested),
 div.form>.nested>* {
     margin: 2px;
@@ -137,7 +140,8 @@ input:invalid {
     <div class="form">
         <label for="dlgSelectFromJsonSearch">Search</label>
         <input id="dlgSelectFromJsonSearch" type="text">
-        <table style="grid-column: span 2;">
+        <button id="dlgSelectFromJsonClose">❌</button>
+        <table style="grid-column: span 3;">
             <thead><tr><th>Key</th><th>Message</th></tr></thead>
             <tbody id="dlgSelectFromJsonTbody"></tbody>
         </table>
@@ -288,16 +292,17 @@ const dlgSelectFromJson = (function() {
     const dlg = document.getElementById("dlgSelectFromJson");
     /** @type {HTMLInputElement} */
     const searchBox = document.getElementById("dlgSelectFromJsonSearch");
+    /** @type {HTMLButtonElement} */
+    const closeBtn = document.getElementById("dlgSelectFromJsonClose");
     /** @type {HTMLTableSectionElement} */
     const tbody = document.getElementById("dlgSelectFromJsonTbody");
-
-    let search
 
     function reset() {
         searchBox.oninput = null;
         searchBox.value = "";
         tbody.innerHTML = "";
         dlg.onclose = null;
+        closeBtn.onclick = null;
     }
 
     /** @return {Promise<string[] | null>} the selected key parts */
@@ -363,6 +368,7 @@ const dlgSelectFromJson = (function() {
                 tbody.appendChild(tr);
             }
 
+            /** @type {CancellationToken} */
             let searchCancellationToken = null;
             searchBox.oninput = async event => {
                 if (searchCancellationToken) {
@@ -393,9 +399,15 @@ const dlgSelectFromJson = (function() {
                 if (!count) {
                     appendResult(null, "(No results.)");
                 }
+                searchCancellationToken = null;
+            };
+
+            closeBtn.onclick = event => {
+                dlg.close();
             };
 
             dlg.onclose = event => {
+                if (searchCancellationToken) searchCancellationToken.cancel();
                 resolve(result);
             };
 
