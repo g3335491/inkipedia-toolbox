@@ -417,7 +417,11 @@ function update() {
 ===Internal names===
 {{Internal name
 |game=${colourBox.value}
-|name1=${pathParts[pathParts.length - 1]}${refForInternalBox.value}
+`;
+            if (engAsTitleBox.checked && "USen" in names) {
+                outbox.value += `|title=${names["USen"]}\n`;
+            }
+            outbox.value += `|name1=${pathParts[pathParts.length - 1]}${refForInternalBox.value}
 |meaning1=
 }}
 `;
