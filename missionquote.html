@@ -63,6 +63,11 @@ input:invalid {
 </div>
 <label for="character">Character</label>
 <select id="character">
+    <optgroup label="Splatoon Raiders" style="background:#0CE0B8">
+        <option value="Raiders|Frye">(Raiders) Frye</option>
+        <option value="Raiders|Shiver">(Raiders) Shiver</option>
+        <option value="Raiders|Big Man">(Raiders) Big Man</option>
+    </optgroup>
     <optgroup label="Splatoon">
         <option value="S|Cap'n Cuttlefish">Cap'n Cuttlefish</option>
         <option value="S|DJ Octavio hidden">DJ Octavio (hidden)</option>
@@ -180,53 +185,68 @@ function msg_fmt_mediawiki(/** @type {string} */ msg, /** @type {string} */ lang
 
     // Remove consecutive color tags
     msg = msg.replace(/\[color=[0-9a-f]{4}\](\s*)(\[color=[0-9a-f]{4}\])/g, "$1$2");
-    // Remove repeated SO orange color tag
-    msg = msg.replace(/(\[color=0004\][^\[\]]*)\[color=0004\]/g, "$1");
-    // SO orange color
-    msg = msg.replace(/\[color=0004\](.+?)( ?)\[color=ffff\]/gs, "{{Color|$1|DarkOrange}}$2");
 
-    // Normal orange color
-    msg = msg.replace(/\[color=0001\](.+?)( ?)\[color=ffff\]/gs, "{{Color|$1|Orange}}$2");
+    if (curGame == "SO") {
+        // Remove repeated SO orange color tag
+        msg = msg.replace(/(\[color=0004\][^\[\]]*)\[color=0004\]/g, "$1");
+        // SO orange color
+        msg = msg.replace(/\[color=0004\](.+?)( ?)\[color=ffff\]/gs, "{{Color|$1|DarkOrange}}$2");
+    }
+
+    if (curGame == "S3" || curGame == "RotM" || curGame == "SO") {
+        // Normal orange color
+        msg = msg.replace(/\[color=0001\](.+?)( ?)\[color=ffff\]/gs, "{{Color|$1|Orange}}$2");
+    }
+
+    if (curGame == "Raiders") {
+        // Normal orange color? (Raiders)
+        msg = msg.replace(/\[color=0000\](.+?)( ?)\[color=ffff\]/gs, "{{Color|$1|Orange}}$2");
+    }
 
     // Icons
     msg = msg.replace(/\[group=0003 type=([0-9a-f]{4}) params=((?:[0-9a-f]{2} ){7}[0-9a-f]{2})\]/g, (match, p_type, p_params) => {
         // The icon type mapping can be found in `CommonMsg/PictFontRef`
-        const icons = {
-            "0037": "{{Icon|SO|color chip general}}",
-            "0038": "{{Icon|SO|palette}}",
-            "0039": "{{Icon|SO|Zone}}",
-            "003a": "{{Icon|SO|Turbine tower}}",
-            "003b": "{{Icon|SO|Infinity ball}}",
-            "003c": "{{Icon|SO|Panicking Alla Mambo}}",
-            "003d": "{{Icon|SO|portal}}",
-            "003e": "{{Icon|SO|Key}}",
-            "003f": "{{Icon|SO|Membux}}",
-            "0040": "{{Icon|SO|Prlz}}",
-            "0041": "{{Icon|SO|armor}}",
-            "0042": "{{Icon|SO|ink bottle}}",
-            "0043": "{{Icon|SO|disc piece}}",
-            "0044": "{{Icon|SO|drone battery}}",
-            "0045": "{{Icon|SO|Lucky Bomb}}",
-            "0046": "{{Button|A|Switch}}",
-            "0047": "{{Button|B|Switch}}",
-            "0048": "{{Button|X|Switch}}",
-            "0049": "{{Button|Y|Switch}}",
-            "004a": "{{Button|Plus|Switch}}",
-            "004b": "{{Button|Left Stick|Switch}}",
-            "004c": "{{Button|Right Stick|Switch}}",
-            "004e": "{{Button|R|Switch}}",
-            "004f": "{{Button|ZL|Switch}}",
-            "0050": "{{Button|ZR|Switch}}",
-            "0052": "{{Button|Minus|Switch}}",
-        };
-        if (p_type in icons) {
-            return icons[p_type];
+        if (curGame == "S3" || curGame == "RotM" || curGame == "SO") {
+            const iconsS3 = {
+                "0037": "{{Icon|SO|color chip general}}",
+                "0038": "{{Icon|SO|palette}}",
+                "0039": "{{Icon|SO|Zone}}",
+                "003a": "{{Icon|SO|Turbine tower}}",
+                "003b": "{{Icon|SO|Infinity ball}}",
+                "003c": "{{Icon|SO|Panicking Alla Mambo}}",
+                "003d": "{{Icon|SO|portal}}",
+                "003e": "{{Icon|SO|Key}}",
+                "003f": "{{Icon|SO|Membux}}",
+                "0040": "{{Icon|SO|Prlz}}",
+                "0041": "{{Icon|SO|armor}}",
+                "0042": "{{Icon|SO|ink bottle}}",
+                "0043": "{{Icon|SO|disc piece}}",
+                "0044": "{{Icon|SO|drone battery}}",
+                "0045": "{{Icon|SO|Lucky Bomb}}",
+                "0046": "{{Button|A|Switch}}",
+                "0047": "{{Button|B|Switch}}",
+                "0048": "{{Button|X|Switch}}",
+                "0049": "{{Button|Y|Switch}}",
+                "004a": "{{Button|Plus|Switch}}",
+                "004b": "{{Button|Left Stick|Switch}}",
+                "004c": "{{Button|Right Stick|Switch}}",
+                "004e": "{{Button|R|Switch}}",
+                "004f": "{{Button|ZL|Switch}}",
+                "0050": "{{Button|ZR|Switch}}",
+                "0052": "{{Button|Minus|Switch}}",
+            };
+            if (p_type in iconsS3) {
+                return iconsS3[p_type];
+            }
         }
-        throw `unhandled icon ${p_type} in:\n${JSON.stringify(msg)}`;
+        // TODO: Handle Raiders icons
+        console.error(`unhandled icon ${p_type} in:\n${JSON.stringify(msg)}`);
+        return "<!-- unknown icon ${p_type} -->";
     });
 
     if (msg.indexOf("[") >= 0) {
-        throw `unprocessed tag in:\n${JSON.stringify(msg)}`;
+        console.error(`unprocessed tag in:\n${JSON.stringify(msg)}`);
+        alert("Output may contain unprocessed tags, please check!");
     }
 
     // line breaks
@@ -401,6 +421,7 @@ const nearbyMessagesTbody = document.getElementById("nearbyMessages");
 
 let curLangJson = null;
 let curKeyParts = null;
+let curGame = charabox.value.split("|")[0];
 
 function update() {
     let str = "";
@@ -414,6 +435,7 @@ function update() {
         outbox.value = "(not valid JSON string)";
         return;
     }
+    curGame = charabox.value.split("|")[0];
     try {
         outbox.value = "";
         for (let box of split_dialogue(str)) {
